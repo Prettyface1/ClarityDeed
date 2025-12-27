@@ -3,63 +3,57 @@ param (
     [string]$BranchName,
     [Parameter(Mandatory = $true)]
     [string]$CommitMessage,
+    [switch]$SkipSync,
     [string]$PRTitle = "",
     [string]$PRBody = ""
 )
 
-# Ensure we are on a clean state
-$currentBranch = git branch --show-current
-Write-Host "Current branch: $currentBranch" -ForegroundColor Cyan
+$BaseBranch = "main"
+$ErrorActionPreference = "Stop"
 
-# Check if branch exists locally, if so delete it to start fresh
-if (git branch --list $BranchName) {
-    Write-Host "Branch $BranchName exists locally. Deleting..." -ForegroundColor Yellow
-    git checkout main
-    git branch -D $BranchName
+try {
+    if (-not $SkipSync) {
+        Write-Host "Syncing with origin/$BaseBranch..." -ForegroundColor Cyan
+        git checkout $BaseBranch -f
+        git fetch origin $BaseBranch
+        git reset --hard "origin/$BaseBranch"
+    }
+
+    if (git branch --list $BranchName) {
+        Write-Host "Deleting existing local branch $BranchName..." -ForegroundColor Yellow
+        git branch -D $BranchName
+    }
+
+    Write-Host "Creating branch $BranchName..." -ForegroundColor Green
+    git checkout -b $BranchName
+
+    Write-Host "Staging and committing..." -ForegroundColor Green
+    git add -A
+    git commit -m $CommitMessage
+
+    Write-Host "Pushing to origin..." -ForegroundColor Green
+    git push origin $BranchName --force
+
+    if ($PRTitle -ne "") {
+        Write-Host "Creating Pull Request..." -ForegroundColor Yellow
+        $ExistingPRList = gh pr list --head $BranchName --base $BaseBranch --json number --jq ".[0].number"
+        if ($ExistingPRList) {
+            Write-Host "PR already exists." -ForegroundColor Yellow
+        }
+        else {
+            gh pr create --title $PRTitle --body "$PRBody`n`n- $CommitMessage" --base $BaseBranch --head $BranchName
+            Start-Sleep -Seconds 5
+        }
+        Write-Host "Merging PR..." -ForegroundColor Yellow
+        gh pr merge --merge --admin --delete-branch
+    }
+
+    git checkout $BaseBranch -f
+    git pull origin $BaseBranch
+    Write-Host "SUCCESS: $BranchName processed." -ForegroundColor Cyan
+
 }
-
-# Create new branch from main
-Write-Host "Creating branch $BranchName..." -ForegroundColor Green
-git checkout main
-git pull origin main
-git checkout -b $BranchName
-
-# Add changes
-Write-Host "Staging changes..." -ForegroundColor Green
-git add -A
-
-# Commit
-Write-Host "Committing: $CommitMessage" -ForegroundColor Green
-git commit -m $CommitMessage
-
-# Push
-Write-Host "Pushing to origin..." -ForegroundColor Green
-git push origin $BranchName --force
-
-# PR Creation
-if ($PRTitle -ne "") {
-    Write-Host "Creating Pull Request..." -ForegroundColor Yellow
-    if ($PRBody -eq "") {
-        $PRBody = "#### Analysis`nAutomated PR for feature: $PRTitle`n`n#### Implementation Details`n- " + $CommitMessage + "`n`n#### Testing Strategy`n- Manual verification of changes in the codebase."
-    }
-    
-    # Check if PR already exists
-    $existingPR = gh pr list --head $BranchName --json number --jq '.[0].number'
-    if ($existingPR) {
-        Write-Host "PR already exists: $existingPR" -ForegroundColor Yellow
-    }
-    else {
-        gh pr create --title $PRTitle --body $PRBody --base main --head $BranchName
-    }
-    
-    # Auto Merge
-    Write-Host "Merging PR..." -ForegroundColor Yellow
-    # Using --merge --delete-branch
-    gh pr merge --merge --delete-branch --admin
+catch {
+    Write-Host "ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
 }
-
-# Go back to main
-git checkout main
-git pull origin main
-
-Write-Host "Task completed for $BranchName" -ForegroundColor Cyan
