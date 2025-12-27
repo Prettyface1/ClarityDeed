@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@hirosystems/clarinet-sdk": "^2.3.2",
+    "@hirosystems/chainhooks-client": "1.0.0",
     "@stacks/connect": "8.2.4",
     "@stacks/transactions": "^6.12.0",
     "chokidar-cli": "^3.0.0",
