@@ -16,6 +16,7 @@
     "@hirosystems/chainhooks-client": "1.0.0",
     "@stacks/connect": "8.2.4",
     "@stacks/transactions": "^6.12.0",
+    "@walletconnect/sign-client": "2.11.0",
     "chokidar-cli": "^3.0.0",
     "typescript": "^5.3.3",
     "vite": "^5.1.4",
